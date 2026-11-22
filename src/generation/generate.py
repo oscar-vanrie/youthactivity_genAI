@@ -112,7 +112,7 @@ def generate_activity(
     max_age: int | None = None,
     terrein: str | None = None,
     strict_age: bool = True,
-    verify: bool = True,
+    verify: bool = False,
 ) -> str:
     hits = search_games(
         brief,
