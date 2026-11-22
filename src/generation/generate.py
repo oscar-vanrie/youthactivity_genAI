@@ -1,94 +1,115 @@
+"""
+Generator: brief -> search_games() -> activiteit met citaatcontrole.
+Gebruik vanuit de rootmap:
+    python -m src.generation.generate
+"""
+
 import re
 
-from langchain_ollama import ChatOllama
 
 from src.rag.search import search_games
+from src.generation.get_llm import get_llm
+from langchain_core.language_models.chat_models import BaseChatModel
+from src.generation.get_llm import get_llm, invoke_llm
 
 MODEL = "qwen3:8b"
-OVERLAP_THRESHOLD = 0.12
 
-STOPWORDS = {
-    "gebruik", "zorgen", "moeten", "kinderen", "spelers", "groepen", "spel",
-    "leden", "gaan", "worden", "wordt", "even", "over", "aandacht", "onder",
-    "tijdens", "voor", "naar", "daarna", "zodat", "elkaar", "bijvoorbeeld",
-    "alleen", "maken", "doen", "krijgen", "laten", "komen", "zetten",
-}
-
-SYSTEM_RULES = """Je ontwerpt een duidelijke, concrete jeugdbewegingsactiviteit in het Nederlands.
-
+SYSTEM_RULES = """Je schrijft een activiteit voor een jeugdbeweging, in het Nederlands.
 Strikte regels:
-1. Kies EEN hoofdbron ([Spel 1], [Spel 2] of [Spel 3]) met de beste spelmechaniek voor de opdracht. Gebruik een tweede bron ALLEEN als die inhoudelijk rijk is en echt aanvult. Negeer bronnen die te weinig spelregels bevatten.
-2. Schrijf GEEN geneste sub-bullets onder spelregels of materialen. Maak van elke stap of elk item één duidelijke regel op het eind voorzien van [Spel N].
-3. Gebruik het gevraagde thema (zoals ruimte / alien invasie / smokkelen) in Titel en Verhaal, en koppel dit logisch aan de mechaniek van de gekozen hoofdbron zonder willekeurige elementen uit andere spellen te mengen.
-4. Reken tijden om: 120 minuten is gelijk aan 2 uur.
-5. Zet bij "Niet in de bronnen" alleen wat ontbreekt of werd aangepast ten opzichte van de bronnen.
-6. Schrijf verzorgd, correct Nederlands zonder verzonnen woorden en zonder verzonnen URL's."""
+1. Gebruik UITSLUITEND de bronspellen hieronder. Niets uit je eigen kennis.
+2. Elke zin met een spelregel, materiaal of veiligheidspunt eindigt met de bron, bv. [Spel 2].
+3. Gebruik voor de spelregels, materialen en veiligheid alleen wat in de bronnen staat.
+4. Staat iets niet in de bronnen? Zet het alleen bij "Niet in de bronnen". Verzin niets om het op te vullen.
+5. Als een bron niet past bij de brief, gebruik hem dan niet en zeg dat.
+6. Verzin geen URL's.
+7. Een thema of verhaal dat je zelf verzint, zet je onder het kopje "Thema-aanpassing (zelf verzonnen)", los van de spelregels. Zet daar geen [Spel N] bij.
+8. Schrijf NOOIT een denkplan of analyse in het Engels. Begin direct met **Titel**."""
+
 
 
 def strip_thinking(text: str) -> str:
-    return re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
+    """Verwijdert <think>-blokken en eventuele denk-monologen vóór het eigenlijke antwoord."""
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.S | re.I).strip()
+
+    marker = re.search(r"(?m)^(\*\*Titel\*\*|#+\s*Titel)", cleaned)
+    if marker and not cleaned.startswith(marker.group(1)):
+        prefix = cleaned[: marker.start()].lower()
+        if any(k in prefix for k in ("we need to", "the brief", "source games", "let's", "i need to")):
+            cleaned = cleaned[marker.start() :].strip()
+
+    return cleaned
 
 
-def stems(text: str) -> set[str]:
-    words = {
-        w for w in re.findall(r"[a-zà-ÿ]{4,}", text.lower())
-        if w not in STOPWORDS
-    }
-    return {w[:5] for w in words}
+def extract_mechanics(hit: dict, llm: BaseChatModel) -> str | None:
+    prompt = f"""Haal uit de onderstaande tekst UITSLUITEND de spelregels, materialen en veiligheidspunten
+die er letterlijk of inhoudelijk in staan. Behoud voorwaarden, aantallen en wincondities nauwkeurig.
+Schrijf ze als korte opsomming in het Nederlands zonder zinnen af te breken.
+Staat er geen spelverloop of materiaallijst in de tekst, antwoord dan exact: GEEN SPELREGELS IN BRON
+
+TEKST:
+{hit['content']}"""
+    text = strip_thinking(invoke_llm(llm, prompt))
+    if not text or "GEEN SPELREGELS" in text.upper():
+        return None
+    return text
 
 
-def build_context(hits: list[dict]) -> str:
-    blocks = []
-    for i, h in enumerate(hits, start=1):
-        meta = h["metadata"]
-        header = (
-            f"[Spel {i}] {h['title']} | leeftijd: {meta.get('leeftijd', '')} | "
-            f"terrein: {meta.get('terrein', '')} | duur: {meta.get('duur', '')}"
-        )
-        blocks.append(f"{header}\n{h['content']}")
-    return "\n\n".join(blocks)
+def verify_claim(claim: str, source_text: str, llm: BaseChatModel) -> bool:
+    prompt = f"""BRON:
+{source_text}
+
+BEWERING:
+{claim}
+
+Staat de kern van deze bewering in de bron (ook als het met andere woorden of een ander meervoud/synoniem is beschreven), en wijkt de bewering niet inhoudelijk af van de bron?
+Antwoord alleen JA of NEE."""
+    answer = strip_thinking(invoke_llm(llm, prompt)).strip().upper()
+    return answer.startswith("JA")
 
 
-def check_citations(text: str, hits: list[dict]) -> list[str]:
-    source_stems = {i: stems(h["content"]) for i, h in enumerate(hits, start=1)}
-    flagged = []
-    active_section = False
+def check_citations(text: str, hits: list[dict], llm: BaseChatModel) -> list[str]:
+    """
+    Controleert elke regel met een bronverwijzing. Een claim wordt gemarkeerd als:
+    - er geen geldige bronverwijzing is, of
+    - het model vindt dat de claim niet in de geciteerde bron staat.
+    Kopjes, de sectie 'Niet in de bronnen' en de thema-aanpassing worden overgeslagen.
+    """
+    flagged: list[str] = []
+    skip_section = False
 
     for line in text.splitlines():
         raw = line.strip()
         if not raw:
             continue
 
-        if raw.startswith("**") and raw.endswith("**"):
-            heading = raw.strip("* ").lower()
-            active_section = any(
-                key in heading for key in ("spelregels", "materialen", "veiligheid")
-            )
+        # Kopjes: **Titel** of # Titel
+        if re.match(r"^(\*\*.+\*\*|#+\s)", raw):
+            lower = raw.lower()
+            skip_section = "niet in de bronnen" in lower or "thema-aanpassing" in lower
             continue
 
-        if not active_section or raw.startswith("⚠") or raw.startswith("- [Spel"):
+        # Alleen opsommingen en genummerde stappen zijn claims
+        if not re.match(r"^([-*]|\d+\.)\s", raw):
+            continue
+        if skip_section or raw.startswith("⚠"):
             continue
 
-        cleaned_line = re.sub(r"\*\*", "", raw)
-        item = re.sub(r"^(\d+\.|[-*])\s*", "", cleaned_line).strip()
-        if not item:
+        body = re.sub(r"^([-*]|\d+\.)\s*", "", raw).strip()
+        refs = [int(n) for n in re.findall(r"\[Spel (\d+)\]", body)]
+        claim = re.sub(r"\[Spel \d+\]", "", body).strip()
+        if not claim:
             continue
 
-        refs = [int(n) for n in re.findall(r"\[Spel (\d+)\]", item)]
-        valid_refs = [r for r in refs if r in source_stems]
+        valid_refs = [r for r in refs if 1 <= r <= len(hits)]
         if not valid_refs:
-            flagged.append(f"zonder geldige bronverwijzing: {item}")
+            flagged.append(f"zonder geldige bronverwijzing: {body}")
             continue
 
-        body_stems = stems(re.sub(r"\[Spel \d+\]", "", item))
-        if not body_stems:
-            continue
-
-        best_overlap = max(
-            len(body_stems & source_stems[r]) / len(body_stems) for r in valid_refs
+        supported = any(
+            verify_claim(claim, hits[r - 1]["content"], llm) for r in valid_refs
         )
-        if best_overlap < OVERLAP_THRESHOLD:
-            flagged.append(f"lage overlap ({best_overlap:.0%}): {item}")
+        if not supported:
+            flagged.append(f"niet in de geciteerde bron gevonden: {body}")
 
     return flagged
 
@@ -108,40 +129,58 @@ def generate_activity(
     if not hits:
         return "Geen geschikte spellen gevonden voor deze brief."
 
+    print("Opgehaalde bronnen:")
+    for i, h in enumerate(hits, start=1):
+        print(f"  [Spel {i}] {h['title']} | {h['source_url']} | leeftijd: {h['metadata'].get('leeftijd', '')}")
+    print()
+
+    llm = get_llm(temperature=0.2)
+
+    # Stap 1: per bron alleen de letterlijke spelregels ophalen
+    extracts: dict[int, str] = {}
+    for i, h in enumerate(hits, start=1):
+        mechanics = extract_mechanics(h, llm)
+        if mechanics:
+            extracts[i] = mechanics
+
+    if not extracts:
+        context = "\n\n".join(
+            f"[Spel {i}] {h['title']}\n{h['content']}" for i, h in enumerate(hits, start=1)
+        )
+    else:
+        context = "\n\n".join(
+            f"[Spel {i}] {hits[i - 1]['title']}\n{text}" for i, text in extracts.items()
+        )
+
+    if not extracts:
+        return "Geen van de gevonden spellen bevat spelregels. Probeer een andere brief."
+
+    context = "\n\n".join(
+        f"[Spel {i}] {hits[i - 1]['title']}\n{text}" for i, text in extracts.items()
+    )
+
+    # Stap 2: activiteit schrijven op basis van de samenvattingen
     prompt = f"""{SYSTEM_RULES}
 
 BRIEF: {brief}
 
-BRONSPELLEN:
-{build_context(hits)}
+BRONSPELLEN (alleen de spelregels die in de bronnen staan):
+{context}
 
-Geef de output exact in dit format:
+Schrijf de activiteit met deze onderdelen en rond elke zin en elk punt volledig af:
+- Titel
+- Verhaal (kort, één alinea, gebaseerd op de bron)
+- Spelregels in stappen, elke stap met [Spel N] en met de juiste spelstappen en winvoorwaarden uit de bron
+- Materialen, elk met [Spel N]
+- Veiligheidspunten, elk met [Spel N]
+- Thema-aanpassing (zelf verzonnen): optioneel, alleen als een thema past bij de brief
+- Niet in de bronnen: volledige zinnen over wat ontbreekt of is aangepast (zonder bronverwijzing)"""
 
-**Titel**
-(één duidelijke titel)
+    text = strip_thinking(invoke_llm(llm, prompt))
 
-**Verhaal**
-(één korte, samenhangende alinea in het thema van de brief)
+    # Stap 3: elke claim laten controleren tegen de geciteerde bron
+    flagged = check_citations(text, hits, llm)
 
-**Spelregels**
-- (stap 1 met concrete actie uit de hoofdbron) [Spel N]
-- (stap 2 met concrete actie uit de hoofdbron) [Spel N]
-- (stap 3 met concrete actie uit de hoofdbron) [Spel N]
-
-**Materialen**
-- (materiaal 1) [Spel N]
-- (materiaal 2) [Spel N]
-
-**Veiligheidspunten**
-- (veiligheidspunt 1 gebaseerd op de bron of het terrein) [Spel N]
-
-**Niet in de bronnen**
-- (wat ontbreekt of is aangepast t.o.v. de bronnen)"""
-
-    llm = ChatOllama(model=MODEL, temperature=0.2)
-    text = strip_thinking(llm.invoke(prompt).content)
-
-    flagged = check_citations(text, hits)
     sources = "\n".join(
         f"- [Spel {i}] {h['title']} ({h['source_url']})" for i, h in enumerate(hits, start=1)
     )
@@ -150,13 +189,10 @@ Geef de output exact in dit format:
         result += "\n\n**⚠ Controle: niet overtuigend onderbouwd door de geciteerde bron:**\n"
         result += "\n".join(f"- {f}" for f in flagged)
     else:
-        result += "\n\n**Controle:** alle regels hebben een bronverwijzing met voldoende overlap."
+        result += "\n\n**Controle:** alle regels zijn door het model als gegrond beoordeeld."
     return result
 
 
 if __name__ == "__main__":
-    test_brief = (
-        "ruimte, alien invasie, raketonderdelen verzamelen en smokkelen zonder gepakt te worden, "
-        "6 tot 8 jaar, 2 uur, bos"
-    )
-    print(generate_activity(test_brief, k=3, min_age=6, max_age=8, terrein="bos"))
+    brief = "bos, 8 tot 10 jaar, 2 uur, buiten rennen en opdrachten uitvoeren in groepjes"
+    print(generate_activity(brief, k=3, min_age=8, max_age=10, terrein="bos"))
