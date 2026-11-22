@@ -1,0 +1,80 @@
+[
+  {
+    "query": "spel waarbij je iemand vertrouwt",
+    "relevant_urls": ["https://chiro.be/game/41766"]
+  },
+  {
+    "query": "spel met een blinddoek",
+    "relevant_urls": ["https://chiro.be/game/41766"]
+  },
+  {
+    "query": "gevoel van paniek en angst in een spel",
+    "relevant_urls": ["https://chiro.be/game/41766"]
+  },
+  {
+    "query": "spel in het donker",
+    "relevant_urls": ["https://chiro.be/game/41551"]
+  },
+  {
+    "query": "avondspel waarbij een bal verstopt wordt",
+    "relevant_urls": ["https://chiro.be/game/41551"]
+  },
+  {
+    "query": "spel om 's nachts wakker te blijven",
+    "relevant_urls": ["https://chiro.be/game/114520"]
+  },
+  {
+    "query": "spel waarbij leden geld verdienen en opdrachten kopen",
+    "relevant_urls": ["https://chiro.be/game/41328"]
+  },
+  {
+    "query": "spel met opdrachtenkaartjes die je trekt",
+    "relevant_urls": ["https://chiro.be/game/40314"]
+  },
+  {
+    "query": "binnenspel met kaartjes",
+    "relevant_urls": ["https://chiro.be/game/40314"]
+  },
+  {
+    "query": "aanvallers en verdedigers die een bal veroveren",
+    "relevant_urls": ["https://chiro.be/game/40967"]
+  },
+  {
+    "query": "spel met klakkebuizen en propjes schieten",
+    "relevant_urls": ["https://chiro.be/game/40967"]
+  },
+  {
+    "query": "estafette waarbij groepen achter elkaar lopen",
+    "relevant_urls": ["https://chiro.be/game/107250"]
+  },
+  {
+    "query": "dierenspel voor jonge kinderen",
+    "relevant_urls": ["https://chiro.be/game/107250"]
+  },
+  {
+    "query": "rugbyspel op een groot sportveld voor oudere leden",
+    "relevant_urls": ["https://chiro.be/game/40881"],
+    "filters": {"min_age": 16, "max_age": 18, "terrein": "sportveld"}
+  },
+  {
+    "query": "escape room met codes en cijferslotten",
+    "relevant_urls": ["https://chiro.be/game/108063"]
+  },
+  {
+    "query": "spel met Italië en een reis rond de wereld",
+    "relevant_urls": ["https://chiro.be/game/108063"]
+  },
+  {
+    "query": "spel voor 9 tot 12 jaar op het grasveld",
+    "relevant_urls": ["https://chiro.be/game/41766", "https://chiro.be/game/40967"],
+    "filters": {"min_age": 9, "max_age": 12, "terrein": "grasveld"}
+  },
+  {
+    "query": "spel over liefde",
+    "relevant_urls": ["https://chiro.be/game/41822"]
+  },
+  {
+    "query": "spel over gevoelens",
+    "relevant_urls": ["https://chiro.be/game/109254"]
+  }
+]

@@ -1,0 +1,82 @@
+{
+  "spel over liefde": [
+    {
+      "title": "Liefdesspel",
+      "source_url": "https://chiro.be/game/41822",
+      "verdict": "ja",
+      "reason": "het gaat over een vragen die eje stelt over gevoelens"
+    },
+    {
+      "title": "Liefde",
+      "source_url": "https://chiro.be/game/68506",
+      "verdict": "ja",
+      "reason": "j"
+    },
+    {
+      "title": "Beter beschermd",
+      "source_url": "https://chiro.be/game/108994",
+      "verdict": "deels",
+      "reason": "niet perse over liefde, het woord liefde word gewon gebruikt"
+    }
+  ],
+  "spel met klakkebuizen en propjes schieten": [
+    {
+      "title": "Klakkebuisgevecht",
+      "source_url": "https://chiro.be/game/40967",
+      "verdict": "ja",
+      "reason": "het is het spel dat word beschreven"
+    },
+    {
+      "title": "klakkebuizenoorlogje",
+      "source_url": "https://chiro.be/game/41127",
+      "verdict": "ja",
+      "reason": "zelfde reden"
+    },
+    {
+      "title": "Pangspel",
+      "source_url": "https://chiro.be/game/41770",
+      "verdict": "nee",
+      "reason": "n"
+    }
+  ],
+  "gevoel van paniek en angst in een spel": [
+    {
+      "title": "Deurenspel",
+      "source_url": "https://chiro.be/game/68582",
+      "verdict": "ja",
+      "reason": "zelfd woorden"
+    },
+    {
+      "title": "Ongelooflijk, ongelijkheid bestaat nog steeds",
+      "source_url": "https://chiro.be/game/68612",
+      "verdict": "ja",
+      "reason": "j"
+    },
+    {
+      "title": "Het grote geluksonderzoek",
+      "source_url": "https://chiro.be/game/109914",
+      "verdict": "ja",
+      "reason": "psychisch welzijn en de angst daarvoor"
+    }
+  ],
+  "spel waarbij leden geld verdienen en opdrachten kopen": [
+    {
+      "title": "Red de wereld",
+      "source_url": "https://chiro.be/game/41023",
+      "verdict": "ja",
+      "reason": "gaat over geld"
+    },
+    {
+      "title": "Simsspel",
+      "source_url": "https://chiro.be/game/114761",
+      "verdict": "ja",
+      "reason": "gaat weer over dingen kopen"
+    },
+    {
+      "title": "Monopoly op congé",
+      "source_url": "https://chiro.be/game/114491",
+      "verdict": "ja",
+      "reason": "is ponopuly"
+    }
+  ]
+}
