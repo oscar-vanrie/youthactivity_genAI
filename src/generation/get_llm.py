@@ -21,11 +21,22 @@ def get_llm(temperature: float = 0.2) -> BaseChatModel:
 
     if provider == "groq":
         from langchain_groq import ChatGroq
-        return ChatGroq(
-            model=model or "llama-3.1-8b-instant",
-            temperature=temperature,
-        )
 
+        selected_model = model or "llama-3.1-8b-instant"
+        kwargs: dict = {
+            "model": selected_model,
+            "temperature": temperature,
+            "max_tokens": 2048,
+        }
+        if "gpt-oss" in selected_model:
+            kwargs["reasoning_effort"] = "low"
+            kwargs["reasoning_format"] = "hidden"
+        elif "qwen" in selected_model:
+            kwargs["reasoning_effort"] = "none"
+
+        return ChatGroq(**kwargs)
+
+    
     if provider == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI
         return ChatGoogleGenerativeAI(
@@ -46,7 +57,6 @@ def get_llm(temperature: float = 0.2) -> BaseChatModel:
 
 def _extract_content(response) -> str:
     content = getattr(response, "content", "")
-    text = ""
     if isinstance(content, list):
         parts = []
         for block in content:
@@ -54,23 +64,9 @@ def _extract_content(response) -> str:
                 parts.append(block.get("text", ""))
             elif isinstance(block, str):
                 parts.append(block)
-        text = "\n".join(parts)
-    else:
-        text = str(content or "")
+        return "\n".join(parts).strip()
 
-    text = text.strip()
-    if text:
-        return text
-
-    # Fallback als een reasoning-model tekst in additional_kwargs zet
-    kwargs = getattr(response, "additional_kwargs", {}) or {}
-    for key in ("reasoning_content", "reasoning", "text"):
-        val = kwargs.get(key)
-        if isinstance(val, str) and val.strip():
-            return val.strip()
-
-    return ""
-
+    return str(content or "").strip()
 
 def invoke_llm(
     llm: BaseChatModel,
