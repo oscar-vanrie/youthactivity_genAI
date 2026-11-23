@@ -36,6 +36,16 @@ AGENT_STYLES = {
 }
 
 PRESETS = {
+    "Demo Proposal: Space & Alien Invasion (8–10j, bos)": {
+        "use_age": True,
+        "age": (8, 10),
+        "terrein_optie": "bos",
+        "k": 2,
+        "strict_age": True,
+        "verify": False,
+        "brief": "2 uur durend bosspel in groepjes met smokkel- en opdrachtenmechaniek",
+        "theme": "Space / Alien Invasion — Vind de verloren raketonderdelen",
+    },
     "Spionnen op het grasplein (11–14j)": {
         "use_age": True,
         "age": (11, 14),
@@ -110,6 +120,102 @@ def _split_by_agent(output: str) -> dict[str, list[str]]:
         buckets[current].append(line)
 
     return buckets
+
+
+# Registreer een Unicode TTF-font zodat speciale tekens (streepjes, trema's,
+# enz.) correct renderen zonder encoding-crash. Core-fonts (Helvetica) ondersteunen
+# deze tekens niet, dus zoeken we eerst een systeemfont op.
+import os
+
+_FONT_CANDIDATES = [
+    ("C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/arialbd.ttf"),
+    (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    ),
+    ("/Library/Fonts/Arial.ttf", "/Library/Fonts/Arial Bold.ttf"),
+]
+
+
+def _register_pdf_fonts(pdf) -> str:
+    """Registreer een Unicode (regular + bold) fontpaar en geef de familienaam terug."""
+    for regular, bold in _FONT_CANDIDATES:
+        if os.path.exists(regular) and os.path.exists(bold):
+            try:
+                pdf.add_font("App", "", regular)
+                pdf.add_font("App", "B", bold)
+                return "App"
+            except Exception:
+                continue
+    return "Helvetica"
+
+
+def _pdf_write_line(pdf, family: str, text: str) -> None:
+    """Schrijf een alinea met basisopmaak (bold-streepjes worden verwijderd)."""
+    text = text.replace("**", "")
+    pdf.multi_cell(0, 6, text, new_x="LMARGIN", new_y="NEXT")
+
+
+def _markdown_to_pdf(output: str) -> bytes:
+    """Zet de ruwe Markdown-output om naar een netjes geformatteerde PDF (bytes)."""
+    from fpdf import FPDF
+
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+
+    family = _register_pdf_fonts(pdf)
+
+    # Titel uit de eerste # kop
+    lines = output.splitlines()
+
+    for raw in lines:
+        line = raw.rstrip()
+        stripped = line.strip()
+
+        if not stripped:
+            pdf.ln(3)
+            continue
+
+        # Horizontale lijn / scheiding
+        if re.fullmatch(r"-{3,}|\*{3,}|_{3,}", stripped):
+            pdf.ln(1)
+            pdf.set_draw_color(180, 180, 180)
+            pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
+            pdf.ln(2)
+            continue
+
+        # Koppen
+        heading_match = re.match(r"^(#{1,6})\s+(.*)", stripped)
+        if heading_match:
+            level = len(heading_match.group(1))
+            size = {1: 16, 2: 13, 3: 12}.get(level, 11)
+            pdf.set_font(family, "B", size)
+            pdf.set_text_color(31, 41, 55)
+            pdf.multi_cell(0, size * 0.6, heading_match.group(2), new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(1)
+            continue
+
+        # Bulletpoints
+        bullet_match = re.match(r"^[-*+]\s+(.*)", stripped)
+        if bullet_match:
+            pdf.set_font(family, "", 11)
+            pdf.set_text_color(31, 41, 55)
+            pdf.set_x(pdf.l_margin + 5)
+            pdf.cell(5, 6, "•", new_x="RIGHT", new_y="TOP")
+            pdf.multi_cell(
+                0, 6, bullet_match.group(1).replace("**", ""), new_x="LMARGIN", new_y="NEXT"
+            )
+            continue
+
+        # Gewone tekst (inclusief bronvermeldingen zoals [Spel N])
+        pdf.set_font(family, "", 11)
+        pdf.set_text_color(31, 41, 55)
+        _pdf_write_line(pdf, family, line)
+
+    # Encodeer naar bytes; vervang eventuele resterende niet-renderbare tekens zodat
+    # de download nooit crasht op onverwachte tekens.
+    return bytes(pdf.output())
 
 
 # Initialiseer standaardwaarden (totaal andere settings dan voorheen)
@@ -250,9 +356,22 @@ if st.button("Genereer activiteit", type="primary"):
         with st.expander("Bekijk volledige ruwe Markdown-output"):
             st.code(output, language="markdown")
 
-        st.download_button(
-            label="Download als Markdown (.md)",
-            data=output,
-            file_name="youthactivity_spionnenmissie.md",
-            mime="text/markdown",
-        )
+        dl_md, dl_pdf = st.columns(2)
+        with dl_md:
+            st.download_button(
+                label="Download als Markdown (.md)",
+                data=output,
+                file_name="youthactivity_spionnenmissie.md",
+                mime="text/markdown",
+            )
+        with dl_pdf:
+            try:
+                pdf_bytes = _markdown_to_pdf(output)
+                st.download_button(
+                    label="Download als PDF (.pdf)",
+                    data=pdf_bytes,
+                    file_name="youthactivity_spionnenmissie.pdf",
+                    mime="application/pdf",
+                )
+            except Exception as exc:  # nooit de app laten crashen door de PDF-export
+                st.error(f"PDF-export is mislukt: {exc}")

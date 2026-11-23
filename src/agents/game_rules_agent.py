@@ -21,9 +21,16 @@ Strikte regels:
 2. Elke zin bij Spelregels, Groepsindeling/Winconditie en Materialen eindigt op [Spel N].
 3. Bij **Materialen**: zet ALLEEN tastbare voorwerpen/spelmateriaal (ballen, kaartjes, flesjes, touw...).
    Zet NOOIT personen, leiding, tikkers of figuranten onder Materialen.
-4. Ontbreekt een onderdeel (zoals expliciete winconditie of groepsgrootte) in de bron?
-   Vermeld dit dan expliciet onder **Niet in de bronnen** (zonder [Spel N]).
-5. Schrijf helder in het Nederlands, zonder denkplannen of Engelse termen."""
+4. Verzin NOOIT aantallen. Vul onder **Groepsindeling en winconditie** of **Spelregels in stappen**
+   nooit zelf een spelersaantal, teamgrootte of tijdsduur (spelduur) in die niet letterlijk in de bron staat,
+   ook niet als die aannemelijk lijkt. Gebruik uitsluitend de aantallen die letterlijk in de bron staan
+   en eindig die regel met het juiste [Spel N].
+   - Staat de groepsgrootte, het aantal spelers per team of de spelduur NIET letterlijk in de bron?
+     Schrijf dan op die plaats exact: Niet gespecificeerd in de bron [Spel N]
+     (met het [Spel N] van het spel waarop de regel betrekking heeft).
+5. Noteer ONTBROKENDE onderdelen (zoals een ontbrekende winconditie, groepsgrootte of spelduur)
+   UITSLUITEND onder **Niet in de bronnen** (zonder [Spel N]). Verzin ze daar niet en vul ze elders niet in.
+6. Schrijf helder in het Nederlands, zonder denkplannen of Engelse termen."""
 
     def __init__(self, llm: BaseChatModel) -> None:
         self.llm = llm
@@ -35,6 +42,12 @@ BRIEF: {ctx.brief}
 
 BRONSPELLEN:
 {ctx.sources_text}
+
+BELANGRIJK — GEEN VERZONNEN AANTALLEN:
+Staan groepsgrootte, aantal spelers per team of spelduur NIET letterlijk bij een spel in de bronnen?
+Verzin ze dan NIET. Schrijf op die plaats exact: Niet gespecificeerd in de bron [Spel N]
+en vermeld het ontbrekende getal uitsluitend onder **Niet in de bronnen** (zonder [Spel N]).
+Gebruik alleen aantallen die letterlijk in de bron staan.
 
 Geef exact deze koppen:
 **Titel**
