@@ -306,6 +306,131 @@ theme_input = st.text_input(
     placeholder="Bijv. Spionnenmissie, Piraten, Ruimtereis...",
 )
 
+def _render_activity(output: str) -> None:
+    """Render de gegenereerde activiteit (agent-kleuren, downloads) uit de ruwe output."""
+    sections = _split_by_agent(output)
+
+    if sections["rules"]:
+        _agent_card_header(AGENT_STYLES["rules"])
+        st.markdown("\n".join(sections["rules"]).strip())
+        st.markdown("---")
+
+    if sections["story"]:
+        _agent_card_header(AGENT_STYLES["story"])
+        st.markdown("\n".join(sections["story"]).strip())
+        st.markdown("---")
+
+    if sections["safety"]:
+        _agent_card_header(AGENT_STYLES["safety"])
+        st.markdown("\n".join(sections["safety"]).strip())
+        st.markdown("---")
+
+    if sections["meta"]:
+        st.markdown("\n".join(sections["meta"]).strip())
+
+    with st.expander("Bekijk volledige ruwe Markdown-output"):
+        st.code(output, language="markdown")
+
+    dl_md, dl_pdf = st.columns(2)
+    with dl_md:
+        st.download_button(
+            label="Download als Markdown (.md)",
+            data=output,
+            file_name="youthactivity_spionnenmissie.md",
+            mime="text/markdown",
+        )
+    with dl_pdf:
+        try:
+            pdf_bytes = _markdown_to_pdf(output)
+            st.download_button(
+                label="Download als PDF (.pdf)",
+                data=pdf_bytes,
+                file_name="youthactivity_spionnenmissie.pdf",
+                mime="application/pdf",
+            )
+        except Exception as exc:  # nooit de app laten crashen door de PDF-export
+            st.error(f"PDF-export is mislukt: {exc}")
+
+
+def _to_png_bytes(data: bytes) -> bytes:
+    """Zet eventuele JPEG/andere bytes om naar een geldige PNG (voor correcte download)."""
+    try:
+        from io import BytesIO
+
+        from PIL import Image
+
+        img = Image.open(BytesIO(data))
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
+    except Exception:
+        return data
+
+
+def _extract_title(output: str) -> str:
+    """Haal een nette titel uit de output (eerste kop of **Titel**)."""
+    match = re.search(r"(?m)^#+\s*(.+)$", output)
+    if match:
+        return match.group(1).strip()
+    match = re.search(r"\*\*Titel\*\*\s*\n+\s*(.+)", output)
+    if match:
+        return match.group(1).strip()
+    return ""
+
+
+def _render_visual_section(output: str) -> None:
+    """Seam-sectie voor een printbare thema-visual (badge / spelkaart)."""
+    st.divider()
+    st.markdown("### 🎨 Thema-visual (Badge / Spelkaart)")
+    st.caption("Genereer optioneel een printbare thema-illustratie via een image-model.")
+
+    title = _extract_title(output) or "Chiro spel"
+    theme_value = st.session_state.get("theme_input", "").strip() or "jeugdbeweging"
+    sections = _split_by_agent(output)
+    story = "\n".join(sections["story"]).strip()[:800] or output[:800]
+
+    if st.button("🎨 Genereer thema-visual", key="gen_visual"):
+        st.session_state["visual_requested"] = True
+
+    if st.session_state.get("visual_requested"):
+        with st.spinner("Engelse image-prompt + afbeelding genereren..."):
+            try:
+                from src.generation.visuals import generate_activity_visual
+
+                img_bytes, image_prompt = generate_activity_visual(
+                    theme=theme_value,
+                    title=title,
+                    story=story,
+                )
+            except Exception as exc:  # de visual-sectie mag de app nooit breken
+                img_bytes, image_prompt = None, f"(visual-module fout: {exc})"
+        st.session_state["visual_bytes"] = img_bytes
+        st.session_state["visual_prompt"] = image_prompt
+
+    image_prompt = st.session_state.get("visual_prompt")
+    img_bytes = st.session_state.get("visual_bytes")
+
+    if image_prompt:
+        with st.expander("Bekijk de gebruikte image-prompt"):
+            st.code(image_prompt, language="text")
+
+    if img_bytes:
+        png_bytes = _to_png_bytes(img_bytes)
+        st.image(png_bytes, caption=title, use_container_width=True)
+        st.download_button(
+            label="Download visual als PNG (.png)",
+            data=png_bytes,
+            file_name="youthactivity_visual.png",
+            mime="image/png",
+            key="dl_visual",
+        )
+    elif st.session_state.get("visual_requested"):
+        st.info(
+            "Geen afbeelding kunnen genereren (offline of geen image-API bereikbaar). "
+            "De gebruikte prompt staat hierboven."
+        )
+
+
 if st.button("Genereer activiteit", type="primary"):
     if not brief_input.strip():
         st.warning("Vul eerst een activiteitenbrief in.")
@@ -333,45 +458,13 @@ if st.button("Genereer activiteit", type="primary"):
 
         st.success(f"Klaar in **{elapsed:.1f} seconden**.")
 
-        sections = _split_by_agent(output)
+        # Bewaar de output zodat activiteit + visual ook na reruns (bv. visual-knop) zichtbaar blijven
+        st.session_state["activity_output"] = output
+        st.session_state["visual_bytes"] = None
+        st.session_state["visual_prompt"] = None
+        st.session_state["visual_requested"] = False
 
-        if sections["rules"]:
-            _agent_card_header(AGENT_STYLES["rules"])
-            st.markdown("\n".join(sections["rules"]).strip())
-            st.markdown("---")
-
-        if sections["story"]:
-            _agent_card_header(AGENT_STYLES["story"])
-            st.markdown("\n".join(sections["story"]).strip())
-            st.markdown("---")
-
-        if sections["safety"]:
-            _agent_card_header(AGENT_STYLES["safety"])
-            st.markdown("\n".join(sections["safety"]).strip())
-            st.markdown("---")
-
-        if sections["meta"]:
-            st.markdown("\n".join(sections["meta"]).strip())
-
-        with st.expander("Bekijk volledige ruwe Markdown-output"):
-            st.code(output, language="markdown")
-
-        dl_md, dl_pdf = st.columns(2)
-        with dl_md:
-            st.download_button(
-                label="Download als Markdown (.md)",
-                data=output,
-                file_name="youthactivity_spionnenmissie.md",
-                mime="text/markdown",
-            )
-        with dl_pdf:
-            try:
-                pdf_bytes = _markdown_to_pdf(output)
-                st.download_button(
-                    label="Download als PDF (.pdf)",
-                    data=pdf_bytes,
-                    file_name="youthactivity_spionnenmissie.pdf",
-                    mime="application/pdf",
-                )
-            except Exception as exc:  # nooit de app laten crashen door de PDF-export
-                st.error(f"PDF-export is mislukt: {exc}")
+# Blijvende weergave van de laatst gegenereerde activiteit + bijhorende thema-visual
+if st.session_state.get("activity_output"):
+    _render_activity(st.session_state["activity_output"])
+    _render_visual_section(st.session_state["activity_output"])
