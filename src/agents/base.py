@@ -10,6 +10,8 @@ from .storyteller_agent import StorytellerAgent
 
 @dataclass
 class ActivityContext:
+    """Gedeelde invoer voor de drie agents: brief, bronnen en optionele filters."""
+
     brief: str
     sources_text: str
     min_age: int | None = None

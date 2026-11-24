@@ -1,5 +1,7 @@
+import os
 import re
 import time
+
 import streamlit as st
 
 from src.generation.generate import generate_activity
@@ -80,6 +82,7 @@ PRESETS = {
 
 
 def _agent_card_header(style: dict) -> None:
+    """Toon een gekleurde agent-kop met badge, naam en rol."""
     st.markdown(
         f"""
         <div style="
@@ -108,7 +111,8 @@ def _split_by_agent(output: str) -> dict[str, list[str]]:
 
     for line in output.splitlines():
         clean_heading = re.sub(r"[*_#]", "", line).strip().lower()
-        if clean_heading.startswith("verhaal") or "thema-aanpassing" in clean_heading or "thema‑aanpassing" in clean_heading:
+        clean_heading = re.sub(r"[\u2010-\u2015\u2212]", "-", clean_heading)
+        if clean_heading.startswith("verhaal") or "thema-aanpassing" in clean_heading:
             current = "story"
         elif "veiligheidspunten" in clean_heading or "leeftijds- en terreininschatting" in clean_heading:
             current = "safety"
@@ -125,8 +129,6 @@ def _split_by_agent(output: str) -> dict[str, list[str]]:
 # Registreer een Unicode TTF-font zodat speciale tekens (streepjes, trema's,
 # enz.) correct renderen zonder encoding-crash. Core-fonts (Helvetica) ondersteunen
 # deze tekens niet, dus zoeken we eerst een systeemfont op.
-import os
-
 _FONT_CANDIDATES = [
     ("C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/arialbd.ttf"),
     (
@@ -233,6 +235,7 @@ if "initialized" not in st.session_state:
 
 
 def _apply_preset(name: str) -> None:
+    """Laad de instellingen van een preset in de sessiestatus."""
     p = PRESETS[name]
     st.session_state.use_age = p["use_age"]
     st.session_state.age = p["age"]

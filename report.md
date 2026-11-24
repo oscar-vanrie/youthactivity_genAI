@@ -1,6 +1,6 @@
 ## Data and RAG Pipeline
 
-2.1 Problem and Goal The retrieval component must supply the generation pipeline (and upcoming Game Rules agent) with usable building blocks—rules, materials, terrain, and safety notes—extracted from real youth-movement games. Rather than finding one exact match, retrieval needs to return a small, relevant set of complete game descriptions that match a user's activity brief (target age, terrain, duration, and theme).
+2.1 Problem and Goal The retrieval component must supply the generation pipeline (and Game Rules agent) with usable building blocks—rules, materials, terrain, and safety notes—extracted from real youth-movement games. Rather than finding one exact match, retrieval needs to return a small, relevant set of complete game descriptions that match a user's activity brief (target age, terrain, duration, and theme).
 
 2.2 Data Collection and Cleaning We scraped 2,**442** games from chiro.be into games_raw.json. Each entry includes a title, source **URL**, free-text description, materials, and metadata (duration, age, player count, game type, terrain, and themes). Because the raw data contains noisy placeholders (e.g., *andere*, *null*), inconsistent age strings (e.g., *van 6 tot jaaar*), and missing fields, we built a preprocessing step to strip placeholders, join list fields, and parse ages into integer min_age and max_age bounds for filtering.
 
@@ -12,7 +12,7 @@
 
 Semantic Mode: Ranks chunks purely by ChromaDB dense vector similarity.
 
-Hybrid Mode: Combines dense vector rankings with sparse **BM25** keyword rankings (rank_bm25) using Reciprocal Rank Fusion (**RRF**, # 𝑘 60 k=60).
+Hybrid Mode: Combines dense vector rankings with sparse **BM25** keyword rankings (rank_bm25) using Reciprocal Rank Fusion (RRF, k=60).
 
 Age-overlap and terrain filters are applied post-ranking over a candidate pool of **300** games to prevent over-filtering before relevance scoring.
 
@@ -42,4 +42,31 @@ Why openai/gpt-oss-20b worked best: Once response extraction handled reasoning m
 
 Reducing Latency from 3–5 Minutes to ~15 Seconds: Our first prototype executed up to 15–18 sequential **LLM** calls per run (per-source rule extraction, main generation, and line-by-line verify_claim() calls), taking 3 to 5 minutes per activity. We eliminated redundant per-source extraction calls (feeding cleaned chunks directly via build_context()) and consolidated citation checking into one batched verification call (check_citations_batch()) with k=2, cutting runtime by roughly 90% while maintaining grounding checks.
 
-3.4 Current Limitations & Next Steps While the current generator produces reliable, grounded single-pass activities, a monolithic prompt still conflates three distinct responsibilities: extracting strict rules, inventing age-appropriate themes, and evaluating terrain/safety risks (which currently relies too heavily on sparse source text). Our next step is refactoring generate.py into a Multi-Agent pipeline—splitting tasks across specialized Game Rules, Storyteller, and Safety & Age Adaptability agents—before running end-to-end evaluation with **RAGAS**.
+
+3.4 Multi-Agent Architecture & Parallel Execution (agents/) To address the limitations of a monolithic prompt in generate.py, we refactored activity generation into modular agent classes under agents/ (game_rules_agent.py, storyteller_agent.py, safety_age_agent.py, and base.py), orchestrated via an ActivityContext dataclass and run_agents_parallel():
+
+Why 3 Agents Instead of 4: Although the initial proposal table listed four agent categories (including a separate materials role), we consolidated materials into GameRulesAgent to keep the number of **LLM** calls low and protect response speed. We added explicit prompt constraints so GameRulesAgent includes only tangible physical equipment—never people, leaders, or taggers (tikkers)—and marks missing specifications under Niet in de bronnen.
+
+Storyteller Agent: Produces a short narrative grounded in the selected source game without altering game mechanics or win conditions, while isolating invented framing under Thema-aanpassing (zelf verzonnen).
+
+Safety & Age Adaptability Agent: Separates literal safety rules found in the source ([Spel N]) from practical terrain and age-group guidance (without [Spel N]), tailored to the requested age range (e.g., 8–10 vs. 11–14 or 14–16 years) and terrain (e.g., forest vs. grass field or indoor room).
+
+Parallel Execution for Low Latency: Rather than running all agents sequentially or adding a draft-and-critic loop that multiplies **LLM** calls, GameRulesAgent runs first to establish the core game structure, and StorytellerAgent and SafetyAgeAgent then run concurrently using a ThreadPoolExecutor (max_workers=2). This preserves clear role separation while keeping total generation time fast (around a few seconds to ~15 seconds depending on **API** responsiveness).
+
+3.5 Multi-Agent Findings, Verification Trade-Offs & Streamlit Demo (app.py) Testing the multi-agent pipeline across multiple briefs, ages, and terrains surfaced several practical engineering trade-offs:
+
+Why Default Citation Verification Was Set to verify=False: Running an extra **LLM** verification pass (check_citations_batch()) added latency and produced noisy false positives—for example, soft hyphens (\u2011) in headings such as Thema‑aanpassing bypassed keyword skip lists using standard hyphens (-), and **LLM** self-checking over-flagged valid game steps. Because role separation and explicit section rules already structure grounded vs. invented content, we set verify=False by default for speed and cleaner demo output while keeping the option toggleable.
+
+Remaining Prompt & Parallelism Caveats: We observed occasional self-contradictions in GameRulesAgent (such as stating a group size or duration with [Spel 1] while also listing missing group size or duration under Niet in de bronnen), minor phrasing slips in invented themes, and lack of cross-visibility between parallel agents (for instance, SafetyAgeAgent does not inspect StorytellerAgent's draft text because they execute simultaneously). These trade-offs directly inform our next iteration: either tightening prompt constraints further or adding a lightweight post-check where needed without hurting latency.
+
+Streamlit Demo Interface (app.py): We built a Streamlit front end on top of generate_activity() with sidebar filters (min_age, max_age, terrein, k, strict_age, verify), quick scenario presets, color-coded visual cards explaining each agent's responsibility, section grouping by agent, and Markdown export.
+
+## 4. Current Status & Remaining Roadmap
+
+Relative to the project proposal, the core text pipeline—hybrid **RAG** retrieval, modular multi-agent generation, and an interactive Streamlit demo—is functional. Remaining work focuses on:
+
+Visual Asset Generation: Adding theme-consistent printable visuals (such as badges or game maps) aligned with the generated activity theme.
+
+Export & **MCP** Integration: Adding formatted document export (e.g., **PDF** and Google Docs / Drive integration via **MCP**).
+
+Evaluation & Final Documentation: Running systematic benchmarks (including **RAGAS**) across scenarios and finalizing the technical report and presentation.

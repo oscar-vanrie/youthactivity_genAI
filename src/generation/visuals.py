@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import os
 import urllib.parse
 
@@ -16,14 +15,6 @@ _HTTP_TIMEOUT = 90
 
 def _get_hf_token() -> str | None:
     for name in ("HUGGINGFACE_API_KEY", "HUGGINGFACEHUB_API_TOKEN", "HF_TOKEN"):
-        value = os.getenv(name)
-        if value:
-            return value
-    return None
-
-
-def _get_gemini_key() -> str | None:
-    for name in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
         value = os.getenv(name)
         if value:
             return value
@@ -85,26 +76,6 @@ def _hf_flux(prompt: str) -> bytes | None:
     return None
 
 
-def _gemini_imagen(prompt: str) -> bytes | None:
-    key = _get_gemini_key()
-    if not key:
-        return None
-    model = os.getenv("IMAGEGEN_MODEL", "imagen-3.0-generate-002")
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:predict?key={key}"
-    )
-    body = {"instances": [{"prompt": prompt}], "parameters": {"sampleCount": 1}}
-    resp = requests.post(url, json=body, timeout=_HTTP_TIMEOUT)
-    if not resp.ok:
-        return None
-    data = resp.json()
-    try:
-        encoded = data["predictions"][0]["bytesBase64Encoded"]
-        return base64.b64decode(encoded)
-    except (KeyError, IndexError, TypeError, ValueError):
-        return None
-
-
 def _pollinations(prompt: str) -> bytes | None:
     """Gratis, keyless image-endpoint (fallback zonder API-key)."""
     encoded = urllib.parse.quote(prompt)
@@ -123,8 +94,6 @@ def _try_generate_image(image_prompt: str) -> bytes | None:
     providers: list[tuple[str, object]] = []
     if _get_hf_token():
         providers.append(("huggingface-flux", _hf_flux))
-    if _get_gemini_key():
-        providers.append(("gemini-imagen", _gemini_imagen))
     providers.append(("pollinations", _pollinations))
 
     for name, fn in providers:

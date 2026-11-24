@@ -8,6 +8,7 @@ from src.agents import ActivityContext, run_agents_parallel
 
 
 def strip_thinking(text: str) -> str:
+    """Verwijder denk-sporen en tekst vóór de eerste echte kop."""
     cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.S | re.I).strip()
     marker = re.search(r"(?m)^(\*\*Titel\*\*|\*\*Groepsindeling|\*\*Verhaal\*\*|\*\*Veiligheidspunten|#+\s)", cleaned)
     if marker and not cleaned.startswith(marker.group(1)):
@@ -16,6 +17,7 @@ def strip_thinking(text: str) -> str:
 
 
 def build_context(hits: list[dict]) -> str:
+    """Zet de opgehaalde bronnen om naar één contextblok met [Spel N]-koppen."""
     blocks = []
     for i, h in enumerate(hits, start=1):
         meta = h["metadata"]
@@ -34,6 +36,11 @@ SKIP_SECTION_KEYWORDS = (
     "titel",
     "verhaal",
 )
+
+
+def _normalize_dashes(s: str) -> str:
+    """Vervang alle soorten koppeltekens door een gewone streep (ASCII)."""
+    return re.sub(r"[\u2010-\u2015\u2212]", "-", s)
 
 
 def extract_claims(text: str, num_hits: int) -> tuple[list[tuple[int, str]], list[str]]:
@@ -114,6 +121,7 @@ def generate_activity(
     strict_age: bool = True,
     verify: bool = False,
 ) -> str:
+    """Zoek bronnen, draai de drie agents en lever de volledige activiteit als tekst."""
     hits = search_games(
         brief,
         k=k,
@@ -155,9 +163,6 @@ def generate_activity(
         else:
             result += "\n\n**Controle:** alle bronregels zijn in één batch-check als gegrond beoordeeld."
     return result
-
-def _normalize_dashes(s: str) -> str:
-    return re.sub(r"[\u2010-\u2015\u2212]", "-", s)
 
 
 if __name__ == "__main__":

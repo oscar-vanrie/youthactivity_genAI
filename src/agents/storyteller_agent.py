@@ -22,9 +22,11 @@ Strikte regels:
 3. Schrijf in natuurlijk, verzorgd Nederlands zonder denkplannen."""
 
     def __init__(self, llm: BaseChatModel) -> None:
+        """Bewaar het LLM voor de aanroepen."""
         self.llm = llm
 
     def run(self, ctx: ActivityContext, rules_output: str) -> str:
+        """Schrijf een kaderverhaal en een aparte eigen thema-aanpassing."""
         age_info = f"{ctx.min_age}-{ctx.max_age} jaar" if ctx.min_age or ctx.max_age else "onbekend"
         prompt = f"""{self.SYSTEM_PROMPT}
 

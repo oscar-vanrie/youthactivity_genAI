@@ -24,9 +24,11 @@ Strikte regels:
 3. Schrijf concreet en praktisch in het Nederlands, zonder denkplannen."""
 
     def __init__(self, llm: BaseChatModel) -> None:
+        """Bewaar het LLM voor de aanroepen."""
         self.llm = llm
 
     def run(self, ctx: ActivityContext, rules_output: str) -> str:
+        """Beoordeel veiligheid, leeftijd en terrein en geef praktisch advies."""
         age_info = f"{ctx.min_age}-{ctx.max_age} jaar" if ctx.min_age or ctx.max_age else "niet gespecificeerd"
         prompt = f"""{self.SYSTEM_PROMPT}
 

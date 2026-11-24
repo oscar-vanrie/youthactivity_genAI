@@ -33,9 +33,11 @@ Strikte regels:
 6. Schrijf helder in het Nederlands, zonder denkplannen of Engelse termen."""
 
     def __init__(self, llm: BaseChatModel) -> None:
+        """Bewaar het LLM voor de aanroepen."""
         self.llm = llm
 
     def run(self, ctx: ActivityContext) -> str:
+        """Genereer de gestructureerde spelregels uit de bronnen."""
         prompt = f"""{self.SYSTEM_PROMPT}
 
 BRIEF: {ctx.brief}
